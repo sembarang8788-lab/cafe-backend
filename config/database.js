@@ -27,17 +27,5 @@ const sequelize = databaseUrl
     })
     : new Sequelize({ dialect: 'postgres' }); // Fallback to avoid crash, but will fail authenticate
 
-
-// Test connection
-const testConnection = async () => {
-    try {
-        await sequelize.authenticate();
-        console.log('✅ Successfully connected to PostgreSQL via Sequelize!');
-    } catch (error) {
-        console.error('❌ Unable to connect to the database:', error.message);
-    }
-};
-
-testConnection();
-
 module.exports = sequelize;
+

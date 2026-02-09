@@ -38,6 +38,7 @@ app.get('/', (req, res) => {
 // Health check for database
 app.get('/health', async (req, res) => {
     try {
+        console.log('🔍 Checking database health...');
         await sequelize.authenticate();
         res.json({
             status: 'healthy',
@@ -51,7 +52,8 @@ app.get('/health', async (req, res) => {
             status: 'unhealthy',
             database: 'disconnected',
             error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            hint: 'Check DATABASE_URL and database availability.',
+            timestamp: new Date().toISOString()
         });
     }
 });
@@ -77,27 +79,28 @@ process.on('unhandledRejection', (reason, promise) => {
 // Export app for Vercel
 module.exports = app;
 
-// Start server only if run directly
+// Start server only if run directly (local development)
 if (require.main === module) {
-    const startServer = async () => {
+    // Database sync logic (only for local dev)
+    const syncDatabase = async () => {
         try {
-            // Sync database (won't drop existing tables)
             console.log('🔄 Syncing database...');
             await sequelize.sync({ alter: false });
             console.log('✅ Database synced!');
-
-            app.listen(PORT, () => {
-                console.log(`\n🚀 Server is running on http://localhost:${PORT}`);
-                console.log(`📦 API Endpoints:`);
-                console.log(`   - Products: http://localhost:${PORT}/api/products`);
-                console.log(`   - Orders:   http://localhost:${PORT}/api/orders`);
-                console.log(`   - Users:    http://localhost:${PORT}/api/users`);
-                console.log(`   - Health:   http://localhost:${PORT}/health\n`);
-            });
         } catch (error) {
-            console.error('❌ Unable to start server:', error);
+            console.error('❌ Database sync failed:', error.message);
         }
     };
 
-    startServer();
+    syncDatabase();
+
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Server is running on http://localhost:${PORT}`);
+        console.log(`📦 API Endpoints:`);
+        console.log(`   - Products: http://localhost:${PORT}/api/products`);
+        console.log(`   - Orders:   http://localhost:${PORT}/api/orders`);
+        console.log(`   - Users:    http://localhost:${PORT}/api/users`);
+        console.log(`   - Health:   http://localhost:${PORT}/health\n`);
+    });
 }
+
