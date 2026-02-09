@@ -3,8 +3,12 @@ const express = require('express');
 console.log('🎬 2. Express loaded');
 const cors = require('cors');
 console.log('🎬 3. Cors loaded');
-require('dotenv').config();
-console.log('🎬 4. Dotenv config called');
+try {
+    require('dotenv').config();
+    console.log('🎬 4. Dotenv config called');
+} catch (e) {
+    console.warn('⚠️ Dotenv failed to load (normal in Vercel):', e.message);
+}
 
 // Handle uncaught exceptions early
 process.on('uncaughtException', (err) => {
@@ -36,10 +40,17 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Import routes
-const productRoutes = require('./routes/products');
-const orderRoutes = require('./routes/orders');
-const userRoutes = require('./routes/users');
+// Import routes with error checks
+let productRoutes, orderRoutes, userRoutes;
+try {
+    console.log('🎬 5a. Loading routes...');
+    productRoutes = require('./routes/products');
+    orderRoutes = require('./routes/orders');
+    userRoutes = require('./routes/users');
+    console.log('🎬 5b. Routes loaded successfully');
+} catch (err) {
+    console.error('❌ CRITICAL Error loading routes:', err.message);
+}
 
 // Use routes
 app.use('/api/products', productRoutes);
@@ -58,15 +69,9 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/', (req, res) => {
     res.json({
         message: '☕ Cafe Backend API is running!',
-        version: '1.1.0',
-        orm: 'Sequelize',
-        database: sequelize ? 'initialized' : 'failed',
-        endpoints: {
-            products: '/api/products',
-            orders: '/api/orders',
-            users: '/api/users',
-            health: '/health'
-        }
+        time: new Date().toISOString(),
+        env: process.env.NODE_ENV,
+        database: sequelize ? 'initialized' : 'failed'
     });
 });
 
