@@ -1,8 +1,33 @@
+console.log('🎬 1. Starting initialization...');
 const express = require('express');
+console.log('🎬 2. Express loaded');
 const cors = require('cors');
+console.log('🎬 3. Cors loaded');
 require('dotenv').config();
+console.log('🎬 4. Dotenv config called');
 
-const { sequelize } = require('./models');
+// Handle uncaught exceptions early
+process.on('uncaughtException', (err) => {
+    console.error('❌ CRITICAL: Uncaught Exception:', err.message);
+    console.error(err.stack);
+});
+
+// Handle unhandled promise rejections early
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ CRITICAL: Unhandled Rejection:', reason);
+});
+
+console.log('🎬 5. Loading models...');
+let sequelize;
+try {
+    const models = require('./models');
+    sequelize = models.sequelize;
+    console.log('🎬 6. Models loaded successfully');
+} catch (error) {
+    console.error('❌ CRITICAL Error loading models:', error.message);
+    console.error(error.stack);
+}
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -21,16 +46,26 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 
+// Basic routes
+app.get('/robots.txt', (req, res) => {
+    res.type('text/plain');
+    res.send("User-agent: *\nAllow: /");
+});
+
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // Health check endpoint
 app.get('/', (req, res) => {
     res.json({
         message: '☕ Cafe Backend API is running!',
-        version: '1.0.0',
+        version: '1.1.0',
         orm: 'Sequelize',
+        database: sequelize ? 'initialized' : 'failed',
         endpoints: {
             products: '/api/products',
             orders: '/api/orders',
-            users: '/api/users'
+            users: '/api/users',
+            health: '/health'
         }
     });
 });
@@ -38,6 +73,9 @@ app.get('/', (req, res) => {
 // Health check for database
 app.get('/health', async (req, res) => {
     try {
+        if (!sequelize) {
+            throw new Error('Sequelize not initialized');
+        }
         console.log('🔍 Checking database health...');
         await sequelize.authenticate();
         res.json({
@@ -65,16 +103,7 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal Server Error', message: err.message });
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-    console.error('❌ Uncaught Exception:', err.message);
-    console.error(err.stack);
-});
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection:', reason);
-});
 
 // Export app for Vercel
 module.exports = app;
