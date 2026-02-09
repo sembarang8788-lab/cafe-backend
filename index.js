@@ -1,63 +1,61 @@
-console.log('🎬 1. Starting initialization...');
+console.log('--- STARTUP CHECK ---');
+console.log('Node Version:', process.version);
+console.log('Starting initialization...');
+
 const express = require('express');
-console.log('🎬 2. Express loaded');
 const cors = require('cors');
-console.log('🎬 3. Cors loaded');
+
+// Try load env
 try {
     require('dotenv').config();
-    console.log('🎬 4. Dotenv config called');
+    console.log('✅ Dotenv config loaded');
 } catch (e) {
-    console.warn('⚠️ Dotenv failed to load (normal in Vercel):', e.message);
+    console.warn('⚠️ Dotenv failed to load:', e.message);
 }
 
-// Handle uncaught exceptions early
+// Handle errors early
 process.on('uncaughtException', (err) => {
     console.error('❌ CRITICAL: Uncaught Exception:', err.message);
     console.error(err.stack);
 });
 
-// Handle unhandled promise rejections early
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ CRITICAL: Unhandled Rejection:', reason);
-});
-
-console.log('🎬 5. Loading models...');
+// Load models
 let sequelize;
 try {
+    console.log('⏳ Loading models...');
     const models = require('./models');
     sequelize = models.sequelize;
-    console.log('🎬 6. Models loaded successfully');
+    console.log('✅ Models loaded successfully');
 } catch (error) {
-    console.error('❌ CRITICAL Error loading models:', error.message);
-    console.error(error.stack);
+    console.error('❌ Error loading models:', error.message);
 }
 
-
 const app = express();
-const PORT = process.env.PORT || 3001;
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Import routes with error checks
-let productRoutes, orderRoutes, userRoutes;
-try {
-    console.log('🎬 5a. Loading routes...');
-    productRoutes = require('./routes/products');
-    orderRoutes = require('./routes/orders');
-    userRoutes = require('./routes/users');
-    console.log('🎬 5b. Routes loaded successfully');
-} catch (err) {
-    console.error('❌ CRITICAL Error loading routes:', err.message);
+// Log every request in Vercel
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
+// Import routes as functions to check before use
+function safeUse(path, modulePath) {
+    try {
+        const route = require(modulePath);
+        if (route && typeof route === 'function') {
+            app.use(path, route);
+            console.log(`✅ Route ${path} registered`);
+        } else {
+            console.warn(`⚠️ Route ${path} is not a valid middleware`);
+        }
+    } catch (err) {
+        console.error(`❌ Failed to load route ${path}:`, err.message);
+    }
 }
 
-// Use routes
-app.use('/api/products', productRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/users', userRoutes);
-
-// Basic routes
+// Static/Basic routes
 app.get('/robots.txt', (req, res) => {
     res.type('text/plain');
     res.send("User-agent: *\nAllow: /");
@@ -65,76 +63,55 @@ app.get('/robots.txt', (req, res) => {
 
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Health check endpoint
+// Health check
 app.get('/', (req, res) => {
     res.json({
-        message: '☕ Cafe Backend API is running!',
-        time: new Date().toISOString(),
-        env: process.env.NODE_ENV,
-        database: sequelize ? 'initialized' : 'failed'
+        status: 'online',
+        message: '☕ Cafe Backend API',
+        info: {
+            time: new Date().toISOString(),
+            node: process.version,
+            database: sequelize ? 'initialized' : 'failed'
+        }
     });
 });
 
-// Health check for database
 app.get('/health', async (req, res) => {
     try {
-        if (!sequelize) {
-            throw new Error('Sequelize not initialized');
-        }
-        console.log('🔍 Checking database health...');
+        if (!sequelize) throw new Error('Sequelize not initialized');
         await sequelize.authenticate();
-        res.json({
-            status: 'healthy',
-            database: 'connected',
-            orm: 'Sequelize',
-            timestamp: new Date().toISOString()
-        });
+        res.json({ status: 'healthy', database: 'connected' });
     } catch (error) {
-        console.error('❌ Health Check Failed:', error.message);
-        res.status(500).json({
-            status: 'unhealthy',
-            database: 'disconnected',
-            error: error.message,
-            hint: 'Check DATABASE_URL and database availability.',
-            timestamp: new Date().toISOString()
-        });
+        res.status(500).json({ status: 'unhealthy', error: error.message });
     }
 });
 
+// Dynamic routes
+safeUse('/api/products', './routes/products');
+safeUse('/api/orders', './routes/orders');
+safeUse('/api/users', './routes/users');
 
-// Global error handler middleware
-app.use((err, req, res, next) => {
-    console.error('❌ Error:', err.message);
-    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found', path: req.url });
 });
 
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('❌ UNHANDLED ERROR:', err.stack);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: err.message,
+        path: req.url
+    });
+});
 
-
-// Export app for Vercel
 module.exports = app;
 
-// Start server only if run directly (local development)
+// Local dev setup
 if (require.main === module) {
-    // Database sync logic (only for local dev)
-    const syncDatabase = async () => {
-        try {
-            console.log('🔄 Syncing database...');
-            await sequelize.sync({ alter: false });
-            console.log('✅ Database synced!');
-        } catch (error) {
-            console.error('❌ Database sync failed:', error.message);
-        }
-    };
-
-    syncDatabase();
-
+    const PORT = process.env.PORT || 3001;
     app.listen(PORT, () => {
-        console.log(`\n🚀 Server is running on http://localhost:${PORT}`);
-        console.log(`📦 API Endpoints:`);
-        console.log(`   - Products: http://localhost:${PORT}/api/products`);
-        console.log(`   - Orders:   http://localhost:${PORT}/api/orders`);
-        console.log(`   - Users:    http://localhost:${PORT}/api/users`);
-        console.log(`   - Health:   http://localhost:${PORT}/health\n`);
+        console.log(`🚀 Local server on http://localhost:${PORT}`);
     });
 }
-
