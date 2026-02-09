@@ -74,24 +74,30 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection:', reason);
 });
 
-// Start server
-const startServer = async () => {
-    try {
-        // Sync database (won't drop existing tables)
-        await sequelize.sync({ alter: false });
-        console.log('✅ Database synced!');
+// Export app for Vercel
+module.exports = app;
 
-        app.listen(PORT, () => {
-            console.log(`\n🚀 Server is running on http://localhost:${PORT}`);
-            console.log(`📦 API Endpoints:`);
-            console.log(`   - Products: http://localhost:${PORT}/api/products`);
-            console.log(`   - Orders:   http://localhost:${PORT}/api/orders`);
-            console.log(`   - Users:    http://localhost:${PORT}/api/users`);
-            console.log(`   - Health:   http://localhost:${PORT}/health\n`);
-        });
-    } catch (error) {
-        console.error('❌ Unable to start server:', error);
-    }
-};
+// Start server only if run directly
+if (require.main === module) {
+    const startServer = async () => {
+        try {
+            // Sync database (won't drop existing tables)
+            console.log('🔄 Syncing database...');
+            await sequelize.sync({ alter: false });
+            console.log('✅ Database synced!');
 
-startServer();
+            app.listen(PORT, () => {
+                console.log(`\n🚀 Server is running on http://localhost:${PORT}`);
+                console.log(`📦 API Endpoints:`);
+                console.log(`   - Products: http://localhost:${PORT}/api/products`);
+                console.log(`   - Orders:   http://localhost:${PORT}/api/orders`);
+                console.log(`   - Users:    http://localhost:${PORT}/api/users`);
+                console.log(`   - Health:   http://localhost:${PORT}/health\n`);
+            });
+        } catch (error) {
+            console.error('❌ Unable to start server:', error);
+        }
+    };
+
+    startServer();
+}
